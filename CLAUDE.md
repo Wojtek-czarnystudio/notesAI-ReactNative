@@ -1,4 +1,4 @@
-# Notes App - React Native Mobile Application
+# Notes App - React Native Mobile Application (Expo)
 
 ## Opis projektu
 
@@ -7,76 +7,70 @@ Mobilna aplikacja w React Native (Expo) pozwalająca użytkownikom na:
 2. Udostępnianie screenshotów z innych aplikacji (Share Extension)
 3. Automatyczne przetwarzanie tekstu przez AI (OCR + LLM via Laravel API)
 4. Przeglądanie notatek z kategoriami i podsumowaniami
-5. Otrzymywanie daily summary w formie push notification
 
 ## Stack technologiczny
 
 - **Framework:** React Native z Expo SDK 51+
-- **Language:** TypeScript (zalecane) lub JavaScript
+- **Language:** TypeScript
 - **Navigation:** React Navigation 6
 - **State Management:** React Query (TanStack Query) + React Context dla auth
 - **Storage:** AsyncStorage dla tokenów i cache
 - **API Client:** Axios
-- **UI Components:** React Native core + custom components
-- **Image Picker:** expo-image-picker
+- **Image Handling:** expo-image-picker, expo-image-manipulator
 - **Share Extension:** react-native-receive-sharing-intent
-- **Notifications:** expo-notifications
 
-## Struktura projektu
+## Architektura - ZAIMPLEMENTOWANA
+
+### Struktura folderów
+
 ```
-mobile/
-├── src/
-│   ├── screens/
-│   │   ├── auth/
-│   │   │   ├── LoginScreen.tsx
-│   │   │   └── RegisterScreen.tsx
-│   │   ├── notes/
-│   │   │   ├── NotesListScreen.tsx
-│   │   │   ├── NoteDetailScreen.tsx
-│   │   │   ├── AddNoteScreen.tsx
-│   │   │   └── ProcessNoteScreen.tsx
-│   │   └── onboarding/
-│   │       └── WelcomeScreen.tsx
-│   ├── components/
-│   │   ├── NoteCard.tsx
-│   │   ├── CategoryBadge.tsx
-│   │   ├── LoadingSpinner.tsx
-│   │   └── EmptyState.tsx
-│   ├── navigation/
-│   │   ├── AppNavigator.tsx
-│   │   ├── AuthNavigator.tsx
-│   │   └── types.ts
-│   ├── services/
-│   │   ├── api.ts (axios config)
-│   │   ├── auth.ts
-│   │   └── notes.ts
-│   ├── hooks/
-│   │   ├── useAuth.ts
-│   │   ├── useNotes.ts
-│   │   ├── useNote.ts
-│   │   └── useUploadNote.ts
-│   ├── contexts/
-│   │   └── AuthContext.tsx
-│   ├── types/
-│   │   ├── auth.ts
-│   │   ├── note.ts
-│   │   └── api.ts
-│   ├── utils/
-│   │   ├── storage.ts
-│   │   ├── imageCompression.ts
-│   │   └── formatters.ts
-│   └── theme/
-│       ├── colors.ts
-│       ├── typography.ts
-│       └── spacing.ts
-├── App.tsx
-├── app.json
-└── package.json
+src/
+├── screens/
+│   ├── auth/
+│   │   ├── LoginScreen.tsx          # Email + password login
+│   │   └── RegisterScreen.tsx       # User registration
+│   └── notes/
+│       ├── NotesListScreen.tsx      # Infinite scroll list
+│       ├── NoteDetailScreen.tsx     # Full note view
+│       ├── AddNoteScreen.tsx        # Camera/Gallery picker
+│       └── ProcessNoteScreen.tsx    # Upload + polling status
+├── components/
+│   ├── NoteCard.tsx                 # Note preview card
+│   ├── CategoryBadge.tsx            # Colored category badge
+│   ├── LoadingSpinner.tsx           # Loading indicator
+│   └── EmptyState.tsx               # Empty list placeholder
+├── navigation/
+│   ├── AppNavigator.tsx             # Main app navigation
+│   ├── AuthNavigator.tsx            # Auth screens navigation
+│   └── types.ts                     # Navigation types
+├── services/
+│   ├── api.ts                       # Axios config + interceptors
+│   ├── auth.ts                      # Auth API calls
+│   └── notes.ts                     # Notes API calls
+├── hooks/
+│   ├── useNotes.ts                  # Infinite query
+│   ├── useNote.ts                   # Single note query
+│   ├── useUploadNote.ts             # Upload mutation
+│   └── useDeleteNote.ts             # Delete mutation
+├── contexts/
+│   └── AuthContext.tsx              # Auth state + methods
+├── types/
+│   ├── auth.ts                      # User, AuthResponse
+│   ├── note.ts                      # Note, Category
+│   └── api.ts                       # API errors
+├── utils/
+│   ├── storage.ts                   # AsyncStorage helpers
+│   ├── imageCompression.ts          # Image resize/compress
+│   └── formatters.ts                # Date, text formatters
+└── theme/
+    ├── colors.ts                    # Color palette
+    ├── typography.ts                # Font styles
+    └── spacing.ts                   # Spacing constants
 ```
 
-## Modele danych (TypeScript types)
+## Modele danych
 
-### User
+### User (src/types/auth.ts)
 ```typescript
 interface User {
   id: number;
@@ -86,12 +80,12 @@ interface User {
 }
 ```
 
-### Note
+### Note (src/types/note.ts)
 ```typescript
 interface Note {
   id: number;
-  text: string;
-  summary: string;
+  text: string;                  // Full extracted text
+  summary: string;                // AI-generated summary
   source: 'camera' | 'share' | 'gallery' | 'url';
   categories: Category[];
   created_at: string;
@@ -104,37 +98,22 @@ interface Note {
 interface Category {
   id: number;
   name: string;
-  slug: string;
-  color: string;
+  slug: string;    // e.g., "management", "business"
+  color: string;   // Hex color
 }
 ```
 
-### Auth Response
+## API Configuration (src/services/api.ts)
+
 ```typescript
-interface AuthResponse {
-  user: User;
-  token: string;
-}
-```
-
-## API Service - axios configuration
-
-### Base config (src/services/api.ts)
-```typescript
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 const api = axios.create({
-  baseURL: __DEV__ 
+  baseURL: __DEV__
     ? 'http://10.0.2.2:8000/api'  // Android emulator
     : 'https://api.twoja-domena.pl/api',
-  timeout: 60000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 60000,  // 60s for upload + processing
 });
 
-// Request interceptor - dodaj token
+// Request interceptor - dodaj Bearer token
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('userToken');
   if (token) {
@@ -149,411 +128,324 @@ api.interceptors.response.use(
   async error => {
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('userToken');
-      // Navigate to login (przez navigation ref)
+      // Navigate to login
     }
     return Promise.reject(error);
   }
 );
-
-export default api;
 ```
 
-## Screens flow diagram
+## Endpoints
+
+### Auth (src/services/auth.ts)
+- `POST /auth/login` - Login (email, password)
+- `POST /auth/register` - Registration
+- `POST /auth/logout` - Logout
+- `GET /auth/me` - Get authenticated user
+
+### Notes (src/services/notes.ts)
+- `GET /notes?page=1&category=business` - Lista notatek
+- `GET /notes/{id}` - Szczegóły notatki
+- `POST /notes/process` - Upload image (FormData)
+- `GET /notes/status/{job_id}` - Job status polling
+- `DELETE /notes/{id}` - Usuń notatkę
+
+## Navigation Flow
+
 ```
-┌─────────────┐
-│   Splash    │ (check token w AsyncStorage)
-└──────┬──────┘
-       │
-       ├─ No token ─→ AuthNavigator
-       │                ├─ LoginScreen
-       │                └─ RegisterScreen
-       │
-       └─ Has token ─→ AppNavigator (TabNavigator)
-                         ├─ NotesListScreen (Home)
-                         ├─ AddNoteScreen (Center FAB)
-                         └─ ProfileScreen
+App.tsx
+└─ QueryClientProvider
+   └─ AuthProvider
+      └─ NavigationContainer
+         ├─ AuthNavigator (no token)
+         │  ├─ LoginScreen
+         │  └─ RegisterScreen
+         └─ AppNavigator (has token)
+            └─ TabNavigator
+               ├─ NotesListScreen (Tab)
+               ├─ AddNoteScreen (Tab)
+               ├─ NoteDetailScreen (Stack)
+               └─ ProcessNoteScreen (Stack)
 ```
 
-## Share Extension flow
+## Kluczowe Funkcje
 
-### Android Setup
-W `android/app/src/main/AndroidManifest.xml`:
-```xml
-<activity
-  android:name=".ShareActivity"
-  android:theme="@style/Theme.Transparent"
-  android:exported="true">
-  
-  <intent-filter>
-    <action android:name="android.intent.action.SEND" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <data android:mimeType="image/*" />
-  </intent-filter>
-</activity>
+### 1. AuthContext (src/contexts/AuthContext.tsx)
+- **State:** user, loading
+- **Methods:** login, register, logout
+- **Auto-check:** Sprawdza token w AsyncStorage przy starcie
+- **Auto-logout:** Usuwa token przy 401
+
+### 2. React Query Hooks
+
+#### useNotes (src/hooks/useNotes.ts)
+```typescript
+export const useNotes = (category?: string) => {
+  return useInfiniteQuery({
+    queryKey: ['notes', category],
+    queryFn: async ({ pageParam = 1 }) => {
+      return await notesService.getNotes(pageParam, category);
+    },
+    getNextPageParam: (lastPage) => lastPage.next_page,
+    initialPageParam: 1,
+    refetchInterval: 30000,  // Refresh co 30s
+  });
+};
 ```
 
-### App.tsx integration
+#### useUploadNote (src/hooks/useUploadNote.ts)
+```typescript
+export const useUploadNote = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ imageUri, source, onProgress }) => {
+      const compressedUri = await compressImage(imageUri);
+      return await notesService.uploadImage(compressedUri, source, onProgress);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+    },
+  });
+};
+```
+
+### 3. Image Processing Flow
+
+**AddNoteScreen → ProcessNoteScreen → NotesListScreen**
+
+1. User wybiera camera lub gallery
+2. Permission check (expo-image-picker)
+3. Image picker → URI
+4. Navigate to ProcessNoteScreen({ imageUri, source })
+5. **Compression:** max 2000px width, 80% quality
+6. **Upload:** FormData z `onUploadProgress` callback
+7. **Response:** `{ job_id: string, status: 'pending' }`
+8. **Polling:** Co 2s sprawdza `/notes/status/{job_id}`
+9. **Timeout:** Max 60s
+10. **Success:** Navigate to NotesListScreen
+11. **Error:** Alert + navigate back
+
+### 4. Share Extension Integration
+
+**App.tsx:**
 ```typescript
 useEffect(() => {
   ReceiveSharingIntent.getReceivedFiles(
     (files) => {
       if (files.length > 0) {
-        const imageUri = files[0].filePath;
-        navigation.navigate('ProcessNote', { 
-          imageUri,
-          source: 'share' 
+        navigation.navigate('ProcessNote', {
+          imageUri: files[0].filePath,
+          source: 'share'
         });
       }
     },
     (error) => console.log('Share error:', error)
   );
-  
+
   return () => {
     ReceiveSharingIntent.clearReceivedFiles();
   };
 }, []);
 ```
 
-## Upload flow z progress
-```typescript
-const uploadImage = async (imageUri: string, source: string) => {
-  const formData = new FormData();
-  formData.append('image', {
-    uri: imageUri,
-    type: 'image/jpeg',
-    name: 'note.jpg',
-  } as any);
-  formData.append('source', source);
-  
-  const response = await api.post('/notes/process', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    onUploadProgress: (progressEvent) => {
-      const percentCompleted = Math.round(
-        (progressEvent.loaded * 100) / progressEvent.total!
-      );
-      setUploadProgress(percentCompleted);
-    },
-  });
-  
-  return response.data; // {job_id, status}
-};
-```
-
-## Polling job status
-```typescript
-const pollJobStatus = async (jobId: string) => {
-  const interval = setInterval(async () => {
-    try {
-      const { data } = await api.get(`/notes/status/${jobId}`);
-      
-      if (data.status === 'completed') {
-        clearInterval(interval);
-        setProcessingStatus('completed');
-        queryClient.invalidateQueries(['notes']); // Refresh lista
-        navigation.navigate('Notes');
-      } else if (data.status === 'failed') {
-        clearInterval(interval);
-        setProcessingStatus('error');
-      }
-    } catch (error) {
-      clearInterval(interval);
-      setProcessingStatus('error');
-    }
-  }, 2000); // Co 2 sekundy
-};
-```
-
-## React Query hooks
-
-### useNotes (lista notatek)
-```typescript
-import { useInfiniteQuery } from '@tanstack/react-query';
-
-export const useNotes = (category?: string) => {
-  return useInfiniteQuery({
-    queryKey: ['notes', category],
-    queryFn: async ({ pageParam = 1 }) => {
-      const { data } = await api.get('/notes', {
-        params: { page: pageParam, category }
-      });
-      return data;
-    },
-    getNextPageParam: (lastPage) => lastPage.next_page,
-    refetchInterval: 30000, // Refresh co 30s
-  });
-};
-```
-
-### useUploadNote (mutation)
-```typescript
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-
-export const useUploadNote = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ imageUri, source }: UploadNoteParams) => {
-      // Upload logic
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['notes']);
-    },
-  });
-};
-```
-
-## Push Notifications setup
-```typescript
-import * as Notifications from 'expo-notifications';
-
-// Request permissions
-const registerForPushNotifications = async () => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  
-  if (status === 'granted') {
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
-    
-    // Wyślij token do Laravel API
-    await api.post('/device-token', {
-      token,
-      platform: Platform.OS,
-    });
+**app.json (Android):**
+```json
+"intentFilters": [
+  {
+    "action": "android.intent.action.SEND",
+    "category": ["android.intent.category.DEFAULT"],
+    "data": [{ "mimeType": "image/*" }]
   }
-};
-
-// Listen for notifications
-Notifications.addNotificationReceivedListener(notification => {
-  // Gdy app w foreground
-  console.log('Notification received:', notification);
-  queryClient.invalidateQueries(['notes']);
-});
-
-Notifications.addNotificationResponseReceivedListener(response => {
-  // Gdy user kliknie notification
-  const noteId = response.notification.request.content.data.note_id;
-  navigation.navigate('NoteDetail', { id: noteId });
-});
+]
 ```
 
-## Image compression przed uploadem
-```typescript
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+## Theme System
 
-const compressImage = async (uri: string) => {
-  const manipResult = await manipulateAsync(
-    uri,
-    [{ resize: { width: 2000 } }], // Max width 2000px
-    { compress: 0.8, format: SaveFormat.JPEG }
-  );
-  
-  return manipResult.uri;
-};
-```
-
-## Theme configuration
-
-### colors.ts
+### Colors (src/theme/colors.ts)
 ```typescript
 export const colors = {
-  primary: '#3B82F6',
-  secondary: '#10B981',
+  primary: '#3B82F6',        // Blue
+  secondary: '#10B981',      // Green
   background: '#FFFFFF',
   surface: '#F3F4F6',
   text: '#111827',
   textSecondary: '#6B7280',
   error: '#EF4444',
-  border: '#E5E7EB',
-  
-  // Category colors
+
   categories: {
     management: '#3B82F6',
     business: '#10B981',
     marketing: '#F59E0B',
-    football: '#EF4444',
-    technology: '#8B5CF6',
-    'personal-development': '#EC4899',
-    finance: '#14B8A6',
+    // ... etc
   }
 };
 ```
 
-## Lista tasków
+### Typography (src/theme/typography.ts)
+- Font sizes: xs (12) → 4xl (36)
+- Font weights: normal, medium, semibold, bold
+- Line heights: tight, normal, relaxed
 
-### Setup projektu (4 taski)
-- [ ] Inicjalizacja Expo projektu z TypeScript template
-- [ ] Instalacja dependencies (navigation, react-query, axios, image-picker, etc.)
-- [ ] Konfiguracja app.json (name, slug, version, permissions)
-- [ ] Setup struktury folderów (screens, components, services, hooks, etc.)
+## Screens Details
 
-### Theme & Design System (3 taski)
-- [ ] theme/colors.ts - kolory aplikacji
-- [ ] theme/typography.ts - font sizes, weights
-- [ ] theme/spacing.ts - spacing constants
+### LoginScreen & RegisterScreen
+- **FormState:** email, password, (name dla register)
+- **Validation:** Check empty fields, password match, min 8 chars
+- **ErrorHandling:** Alert.alert z error.response.data.message
+- **AutoLogin:** Po successful register/login
 
-### API & Services (4 taski)
-- [ ] services/api.ts - axios configuration z interceptorami
-- [ ] services/auth.ts - login, register, logout functions
-- [ ] services/notes.ts - CRUD operations dla notatek
-- [ ] utils/storage.ts - AsyncStorage helpers (token management)
+### NotesListScreen
+- **FlatList** z infinite scroll
+- **onEndReached:** fetchNextPage
+- **RefreshControl:** pull-to-refresh
+- **EmptyState:** Gdy brak notatek
+- **NoteCard:** Tap → navigate('NoteDetail', { id })
 
-### Context & State (2 taski)
-- [ ] AuthContext - provider dla auth state, login/logout/register methods
-- [ ] React Query setup - QueryClientProvider w App.tsx
+### NoteDetailScreen
+- **ScrollView** z full text, summary, categories
+- **Delete button:** Alert confirmation → mutation → goBack
+- **Meta:** Source, dates (formatDate)
 
-### Hooks (5 tasków)
-- [ ] useAuth - dostęp do AuthContext
-- [ ] useNotes - useInfiniteQuery dla listy notatek z pagination
-- [ ] useNote - useQuery dla pojedynczej notatki
-- [ ] useUploadNote - useMutation dla uploadu obrazka
-- [ ] useDeleteNote - useMutation dla usuwania notatki
+### AddNoteScreen
+- **2 buttons:** "Take Photo" (camera), "Choose from Gallery"
+- **Permissions:** requestCameraPermissionsAsync, requestMediaLibraryPermissionsAsync
+- **ImagePicker:** launchCameraAsync, launchImageLibraryAsync
+- **Navigation:** navigate('ProcessNote', { imageUri, source })
 
-### Navigation (3 taski)
-- [ ] navigation/AuthNavigator - Stack dla Login/Register screens
-- [ ] navigation/AppNavigator - Tab/Stack navigator dla głównej app
-- [ ] App.tsx - conditional rendering (AuthNav vs AppNav based on token)
+### ProcessNoteScreen
+- **Image preview:** <Image source={{ uri: imageUri }} />
+- **Upload progress:** 0-100% progress bar
+- **Status states:**
+  - uploading (progress bar)
+  - processing (polling animation)
+  - completed (✅ → redirect)
+  - error (❌ → alert)
+- **Polling:** setInterval 2s, clearInterval po 60s lub completion
+- **Auto-redirect:** setTimeout navigate('Main') po completed
 
-### Screens - Auth (2 taski)
-- [ ] LoginScreen - formularz email/password, error handling, navigate to Register
-- [ ] RegisterScreen - formularz name/email/password/confirm, validation, auto-login
+## Error Handling
 
-### Screens - Notes (5 tasków)
-- [ ] NotesListScreen - FlatList z infinite scroll, pull-to-refresh, filters
-- [ ] NoteDetailScreen - display full note text, summary, categories, delete button
-- [ ] AddNoteScreen - buttons "Take Photo" i "Choose from Gallery", permissions handling
-- [ ] ProcessNoteScreen - preview image, upload progress, polling status, loading states
-- [ ] DailySummaryScreen (opcjonalny) - display daily summary
-
-### Components (4 taski)
-- [ ] NoteCard - card component dla listy, pokazuje summary, categories badges, date
-- [ ] CategoryBadge - colored badge z nazwą kategorii
-- [ ] LoadingSpinner - reusable loading indicator z overlay option
-- [ ] EmptyState - ilustracja + tekst dla pustych stanów (brak notatek)
-
-### Share Extension (3 taski)
-- [ ] Android: Konfiguracja AndroidManifest.xml dla Share Intent
-- [ ] iOS: Setup Share Extension (bardziej złożone, dokumentacja z biblioteki)
-- [ ] App.tsx: Integration z react-native-receive-sharing-intent, handle shared files
-
-### Image Handling (3 taski)
-- [ ] expo-image-picker setup - camera i gallery permissions
-- [ ] utils/imageCompression.ts - resize/compress przed uploadem
-- [ ] Upload z FormData i progress tracking
-
-### Push Notifications (3 taski - opcjonalne)
-- [ ] expo-notifications setup, request permissions
-- [ ] Register FCM token w Laravel API
-- [ ] Listeners dla notifications (received, response)
-
-### Onboarding (1 task - opcjonalny)
-- [ ] WelcomeScreen - tutorial jak używać app (screenshots, share)
-
-### Error Handling (2 taski)
-- [ ] Network error handling - offline indicator, retry mechanism
-- [ ] Form validation - email, password strength, error messages
-
-### Testing (2 taski - opcjonalne)
-- [ ] Setup Jest + React Native Testing Library
-- [ ] Component tests dla NoteCard, LoginScreen
-
-### Build & Deployment (3 taski)
-- [ ] Android: Konfiguracja build (keystore, app.json)
-- [ ] Expo EAS Build setup
-- [ ] Test build (APK) i dystrybucja internal
-
-**TOTAL: 50 tasków**
-
-## Permissions wymagane
-
-### Android (app.json)
-```json
-{
-  "expo": {
-    "android": {
-      "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES",
-        "WRITE_EXTERNAL_STORAGE",
-        "INTERNET"
-      ]
-    }
-  }
+### Network Errors
+```typescript
+try {
+  await login({ email, password });
+} catch (error: any) {
+  Alert.alert(
+    'Login Failed',
+    error.response?.data?.message || 'Invalid credentials'
+  );
 }
 ```
 
-### iOS (app.json)
-```json
-{
-  "expo": {
-    "ios": {
-      "infoPlist": {
-        "NSCameraUsageDescription": "Potrzebujemy dostępu do aparatu aby robić zdjęcia notatek",
-        "NSPhotoLibraryUsageDescription": "Potrzebujemy dostępu do galerii aby wybierać zdjęcia"
-      }
-    }
-  }
-}
+### Upload Errors
+- Try-catch w uploadNoteMutation
+- Alert + navigate back
+- Retry mechanism: Nie implementowany (user musi retry manually)
+
+### Processing Timeout
+- clearInterval po 60s
+- Alert('Timeout', 'Processing is taking too long')
+- Navigate back
+
+## Konwencje Kodowania
+
+1. **TypeScript:** Strict typing, unikaj `any`
+2. **Components:** Functional + hooks (FC<Props>)
+3. **Naming:**
+   - Components: PascalCase (NoteCard)
+   - Functions: camelCase (handleLogin)
+   - Types: PascalCase (Note)
+4. **Styling:** StyleSheet.create na końcu pliku
+5. **Async:** async/await + try-catch
+6. **Errors:** User-friendly Alert.alert
+
+## Testing Workflow
+
+### 1. Setup
+```bash
+npm install
+npm start
 ```
 
-## Environment variables
+### 2. Test Auth Flow
+- Open app → LoginScreen
+- Tap "Sign Up" → RegisterScreen
+- Fill form → Auto-login → NotesListScreen (empty)
+- Logout → LoginScreen
+- Login → NotesListScreen
 
-Create `.env` file:
+### 3. Test Camera Flow
+- Tap "Add" tab → AddNoteScreen
+- Tap "Take Photo" → Permission dialog → Camera
+- Take photo → ProcessNoteScreen
+- Watch upload progress (0-100%)
+- Watch polling status → Redirect
+
+### 4. Test Gallery Flow
+- Tap "Choose from Gallery" → Select image
+- Same flow as camera
+
+### 5. Test Share Extension
+- W innej app (np. LinkedIn) zrób screenshot
+- Tap "Share" → Wybierz "NotesAI"
+- App opens → ProcessNoteScreen (auto-upload)
+
+## Debugging
+
+### Metro bundler issues
+```bash
+expo start -c
 ```
-API_URL_DEV=http://10.0.2.2:8000/api
-API_URL_PROD=https://api.twoja-domena.pl/api
+
+### TypeScript errors
+```bash
+npm run type-check
 ```
 
-## User flow scenariusze
+### Network debug
+- Android emulator: `http://10.0.2.2:8000`
+- iOS simulator: `http://localhost:8000` lub ngrok
+- Check axios baseURL w src/services/api.ts
 
-### Scenariusz 1: Nowy użytkownik
-1. Otwiera app → WelcomeScreen (tutorial)
-2. Taps "Zarejestruj się" → RegisterScreen
-3. Fill form → auto-login → NotesListScreen (empty state)
-4. Taps FAB → AddNoteScreen
-5. "Zrób zdjęcie" → Camera → ProcessNoteScreen
-6. Upload + polling → Success → NotesListScreen (1 notatka)
+### AsyncStorage debug
+- React Native Debugger → AsyncStorage tab
+- Check token: AsyncStorage.getItem('userToken')
 
-### Scenariusz 2: Share Extension
-1. User czyta artykuł na LinkedIn
-2. Robi screenshot (Power + Vol Down)
-3. Taps "Share" na screenshocie
-4. Wybiera "Notes App" z listy
-5. App otwiera się → ProcessNoteScreen (auto-upload)
-6. Polling → Success → NotesListScreen
+## Deployment
 
-### Scenariusz 3: Daily Summary
-1. User otrzymuje push notification o 20:00
-2. Taps notification → App opens → DailySummaryScreen
-3. Widzi: "Dziś przeczytałeś o: marketing (3), biznes (2)"
-4. Może tap na kategorię → filtered list
+### Android APK
+```bash
+eas build --platform android --profile preview
+```
 
-## Konwencje kodowania
+### iOS IPA
+```bash
+eas build --platform ios --profile preview
+```
 
-- **TypeScript:** Używaj types/interfaces, unikaj `any`
-- **Naming:** PascalCase dla komponentów, camelCase dla funkcji/zmiennych
-- **Components:** Functional components z hooks (nie class components)
-- **Styling:** StyleSheet.create na końcu pliku
-- **Async:** async/await zamiast .then()
-- **Error handling:** try-catch, pokaż user-friendly messages
-- **Comments:** JSDoc dla exported functions/components
+## TODO / Future Enhancements
 
-## Priorytety dla MVP
+### Wysokiy priorytet
+- [ ] Push notifications (expo-notifications)
+- [ ] iOS Share Extension configuration
+- [ ] Category filtering w NotesListScreen
+- [ ] Search functionality
 
-1. **Must have:** Auth, camera, upload, notes list, share extension
-2. **Should have:** Note detail, delete, daily summary
-3. **Nice to have:** Push notifications, onboarding, stats
+### Średni priorytet
+- [ ] Note editing
+- [ ] Daily summary screen
+- [ ] Offline support (React Query cache persistence)
 
-## Uwagi dla Claude
+### Niski priorytet
+- [ ] Dark mode
+- [ ] Export notes (JSON, TXT, MD)
+- [ ] Multi-language support
 
-- Expo SDK 51+ (użyj aktualnych API)
-- TypeScript preferowane (ale JS też OK jeśli user woli)
-- React Navigation 6 z TypeScript types
-- React Query v5 (TanStack Query)
-- Axios interceptory dla auth token
-- Share Extension to kluczowa feature - priorytet
-- Image compression przed uploadem (data savings)
-- Polling status co 2s, max 60s (timeout)
-- Handle offline gracefully (show message, retry)
-- AsyncStorage dla tokens (nie SecureStore dla prostoty MVP)
-- FCM dla push notifications (opcjonalne, ale bardzo fajne)
+## Support
+
+Dla pytań sprawdź:
+- **README.md** - User documentation
+- **app.json** - Expo configuration
+- **src/services/api.ts** - API setup
+- **src/contexts/AuthContext.tsx** - Auth logic

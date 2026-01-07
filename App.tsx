@@ -1,46 +1,65 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import NotesListScreen from './src/screens/NotesListScreen';
-import NoteDetailScreen from './src/screens/NoteDetailScreen';
-import {Note} from './src/types';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ReceiveSharingIntent from 'react-native-receive-sharing-intent';
+import {AuthProvider, useAuth} from './src/contexts/AuthContext';
+import AuthNavigator from './src/navigation/AuthNavigator';
+import AppNavigator from './src/navigation/AppNavigator';
+import LoadingSpinner from './src/components/LoadingSpinner';
 
-export type RootStackParamList = {
-  NotesList: undefined;
-  NoteDetail: {note?: Note; isNew?: boolean};
-};
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 30000,
+    },
+  },
+});
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+function AppContent() {
+  const {user, loading} = useAuth();
+  const [sharedData, setSharedData] = useState<any>(null);
 
-function App(): React.JSX.Element {
+  useEffect(() => {
+    ReceiveSharingIntent.getReceivedFiles(
+      files => {
+        if (files.length > 0) {
+          setSharedData({
+            imageUri: files[0].filePath,
+            source: 'share',
+          });
+        }
+      },
+      error => console.log('Share error:', error),
+    );
+
+    return () => {
+      ReceiveSharingIntent.clearReceivedFiles();
+    };
+  }, []);
+
+  if (loading) {
+    return <LoadingSpinner fullScreen />;
+  }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="NotesList"
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: '#6200ee',
-          },
-          headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        }}>
-        <Stack.Screen
-          name="NotesList"
-          component={NotesListScreen}
-          options={{title: 'My Notes'}}
-        />
-        <Stack.Screen
-          name="NoteDetail"
-          component={NoteDetailScreen}
-          options={({route}) => ({
-            title: route.params?.isNew ? 'New Note' : 'Edit Note',
-          })}
-        />
-      </Stack.Navigator>
+      {user ? (
+        <AppNavigator sharedData={sharedData} />
+      ) : (
+        <AuthNavigator />
+      )}
     </NavigationContainer>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}

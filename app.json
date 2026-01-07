@@ -1,4 +1,61 @@
 {
-  "name": "NotesAI",
-  "displayName": "NotesAI"
+  "expo": {
+    "name": "NotesAI",
+    "slug": "notesai-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#3B82F6"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.notesai.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Potrzebujemy dostępu do aparatu aby robić zdjęcia notatek",
+        "NSPhotoLibraryUsageDescription": "Potrzebujemy dostępu do galerii aby wybierać zdjęcia"
+      }
+    },
+    "android": {
+      "package": "com.notesai.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#3B82F6"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "category": [
+            "android.intent.category.DEFAULT"
+          ],
+          "data": [
+            {
+              "mimeType": "image/*"
+            }
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3B82F6"
+        }
+      ]
+    ]
+  }
 }
